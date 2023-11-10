@@ -1,66 +1,78 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"math/rand"
+	"log"
 	"net/http"
 	"time"
-
-	"github.com/gofiber/adaptor/v2"
-	"github.com/gofiber/fiber/v2"
 )
 
-type Client struct {
-	name   string
-	events chan *DashBoard
-}
-type DashBoard struct {
-	User uint
+var msgChan chan *Message
+
+type Message struct {
+	SID string
+	Msg string
 }
 
-func main() {
-	app := fiber.New()
-	app.Get("/sse", adaptor.HTTPHandler(handler(dashboardHandler)))
-	app.Listen(":3000")
-}
+var clients = make(map[string]http.ResponseWriter)
 
-func handler(f http.HandlerFunc) http.Handler {
-	return http.HandlerFunc(f)
-}
-func dashboardHandler(w http.ResponseWriter, r *http.Request) {
-	client := &Client{name: r.RemoteAddr, events: make(chan *DashBoard, 10)}
-	go updateDashboard(client)
-
+func getTime(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	sid := r.URL.Query().Get("sid")
+	if msgChan != nil {
+		msg := time.Now().Format("15:04:05")
+		message := &Message{
+			SID: sid,
+			Msg: msg,
+		}
+		msgChan <- message
+	}
+}
+
+func sseHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Client connected!")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	timeout := time.After(1 * time.Second)
-	select {
-	case ev := <-client.events:
-		var buf bytes.Buffer
-		enc := json.NewEncoder(&buf)
-		enc.Encode(ev)
-		fmt.Fprintf(w, "data: %v\n\n", buf.String())
-		fmt.Printf("data: %v\n", buf.String())
-	case <-timeout:
-		fmt.Fprintf(w, ": nothing to sent\n\n")
+	// read sid from request query
+	sid := r.URL.Query().Get("sid")
+	clients[sid] = w
+
+	msgChan = make(chan *Message)
+
+	defer func() {
+		close(msgChan)
+		msgChan = nil
+		fmt.Println("Client closed connection!")
+	}()
+
+	for {
+		select {
+		case message := <-msgChan:
+			fmt.Println(message)
+			rw := clients[message.SID]
+			flusher, ok := rw.(http.Flusher)
+			if !ok {
+				fmt.Println("Could not init http.Flusher!")
+			}
+			fmt.Fprintf(rw, "data: %s\n\n", message.Msg)
+			flusher.Flush()
+		case <-r.Context().Done():
+			fmt.Println("Client closed connection!")
+			return
+		}
 	}
 
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
 }
 
-func updateDashboard(client *Client) {
-	for {
-		db := &DashBoard{
-			User: uint(rand.Uint32()),
-		}
-		client.events <- db
-	}
+func main() {
+	router := http.NewServeMux()
+
+	router.HandleFunc("/event", sseHandler)
+	router.HandleFunc("/time", getTime)
+
+	log.Fatal(http.ListenAndServe(":3000", router))
 }
