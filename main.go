@@ -75,4 +75,5 @@ func main() {
 	router.HandleFunc("/time", getTime)
 
 	log.Fatal(http.ListenAndServe(":3000", router))
+	log.Println("Server started on port 3000!")
 }
