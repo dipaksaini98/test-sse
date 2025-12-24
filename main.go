@@ -142,6 +142,11 @@ func main() {
 	router.HandleFunc("/time", getTime)
 	router.HandleFunc("/ws", wsHandler)
 	router.HandleFunc("/ping", pingPong)
+	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Congratulations, you found the chambers of secrets!"))
+	})
 
 	srv := &http.Server{
 		Addr:              ":8080",
