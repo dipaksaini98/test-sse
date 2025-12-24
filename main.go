@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 var msgChan chan *Message
@@ -15,6 +17,65 @@ type Message struct {
 }
 
 var clients = make(map[string]http.ResponseWriter)
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	// IMPORTANT: lock this down for production
+	CheckOrigin: func(r *http.Request) bool {
+		// // Example: allow same-origin; customize to your domains
+		// origin := r.Header.Get("Origin")
+		// return origin == "http://127.0.0.1:5500"
+
+		// WARNING: allows all origins; restrict this for production use
+		return true
+	},
+}
+
+func wsHandler(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("upgrade:", err)
+		return
+	}
+	defer conn.Close()
+
+	// Good practice: set limits + timeouts
+	conn.SetReadLimit(1 << 20) // 1MB
+	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	// Ping loop to keep idle connections alive across proxies
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	go func() {
+		for range ticker.C {
+			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}()
+
+	for {
+		mt, msg, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("read:", err)
+			return
+		}
+		log.Println(string(msg))
+		xyz := "BITS"
+		msg = []byte(xyz)
+		_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		if err := conn.WriteMessage(mt, msg); err != nil {
+			log.Println("write:", err)
+			return
+		}
+	}
+}
 
 func getTime(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -73,7 +134,14 @@ func main() {
 
 	router.HandleFunc("/event", sseHandler)
 	router.HandleFunc("/time", getTime)
+	router.HandleFunc("/ws", wsHandler)
 
-	log.Println("Server started on port 3000!")
-	log.Fatal(http.ListenAndServe(":3000", router))
+	srv := &http.Server{
+		Addr:              ":8080",
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	log.Println("Server started on port 8080!")
+	log.Fatal(srv.ListenAndServe())
 }
