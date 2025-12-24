@@ -129,12 +129,19 @@ func sseHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func pingPong(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("pong"))
+}
+
 func main() {
 	router := http.NewServeMux()
 
 	router.HandleFunc("/event", sseHandler)
 	router.HandleFunc("/time", getTime)
 	router.HandleFunc("/ws", wsHandler)
+	router.HandleFunc("/web/ping", pingPong)
 
 	srv := &http.Server{
 		Addr:              ":8080",
