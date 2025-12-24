@@ -141,7 +141,7 @@ func main() {
 	router.HandleFunc("/event", sseHandler)
 	router.HandleFunc("/time", getTime)
 	router.HandleFunc("/ws", wsHandler)
-	router.HandleFunc("/web/ping", pingPong)
+	router.HandleFunc("/ping", pingPong)
 
 	srv := &http.Server{
 		Addr:              ":8080",
