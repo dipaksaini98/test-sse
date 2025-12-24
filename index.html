@@ -1,17 +1,77 @@
+
 <!DOCTYPE html>
 <html>
-<head>
-  <title>SSE Client</title>
-</head>
-<body>
-  <div id="sse-data"></div>
-  <script>
-    const sseData = document.getElementById('sse-data');
-    const eventSource = new EventSource('http://localhost:3000/event?sid=2');
+  <head>
+    <title>SSE Client</title>
+    <style>
+      .counter-section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        display: inline-block;
+      }
+      .counter-btn {
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+      }
+      .counter-btn:hover {
+        background-color: #45a049;
+      }
+      .counter-display {
+        font-size: 24px;
+        margin: 10px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="counter-section">
+      <div class="counter-display">
+        Counter: <span id="counter-value">0</span>
+      </div>
+      <button class="counter-btn" id="counter-btn">Increment & Send</button>
+    </div>
+    <div id="sse-data"></div>
+    <div id="ws-data"></div>
+    <script>
+      const sseData = document.getElementById("sse-data");
+      const wsData = document.getElementById("ws-data");
+      const counterValue = document.getElementById("counter-value");
+      const counterBtn = document.getElementById("counter-btn");
 
-    eventSource.onmessage = function (event) {
-      sseData.innerHTML += event.data + '<br>';
-    };
-  </script>
-</body>
+      let counter = 0;
+
+      const eventSource = new EventSource("http://localhost:8080/event?sid=1");
+
+      eventSource.onmessage = function (event) {
+        sseData.innerHTML += event.data + "<br>";
+      };
+
+      const webSocketChannel = new WebSocket("ws://localhost:8080/ws");
+      webSocketChannel.onmessage = function (event) {
+        wsData.innerHTML += "WebSocket: " + event.data + "<br>";
+      };
+
+      webSocketChannel.onopen = () => webSocketChannel.send("Connected!");
+
+      counterBtn.addEventListener("click", function () {
+        counter++;
+        counterValue.textContent = counter;
+
+        if (webSocketChannel.readyState === WebSocket.OPEN) {
+          webSocketChannel.send(
+            JSON.stringify({ type: "counter", value: counter })
+          );
+          wsData.innerHTML += "Sent counter: " + counter + "<br>";
+        } else {
+          wsData.innerHTML += "WebSocket not connected<br>";
+        }
+      });
+    </script>
+  </body>
 </html>
