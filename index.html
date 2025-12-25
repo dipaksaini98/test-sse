@@ -46,13 +46,13 @@
 
       let counter = 0;
 
-      const eventSource = new EventSource("http://3.236.158.129/event?sid=1");
+      const eventSource = new EventSource("http://3.236.158.129/web/event?sid=1");
 
       eventSource.onmessage = function (event) {
         sseData.innerHTML += event.data + "<br>";
       };
 
-      const webSocketChannel = new WebSocket("ws://3.236.158.129/ws");
+      const webSocketChannel = new WebSocket("ws://3.236.158.129/web/ws");
       webSocketChannel.onmessage = function (event) {
         wsData.innerHTML += "WebSocket: " + event.data + "<br>";
       };
